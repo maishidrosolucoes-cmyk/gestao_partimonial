@@ -376,39 +376,31 @@
 
     <!-- Notification Toast -->
     <div id="toast" class="fixed bottom-6 right-6 bg-slate-800 text-white px-6 py-4 rounded-xl shadow-2xl transform transition-all duration-300 translate-y-20 opacity-0 z-50 flex items-center border border-slate-700">
-        <div class="bg-emerald-500 rounded-full w-8 h-8 flex items-center justify-center m    <!-- JAVASCRIPT: O Cérebro da Aplicação -->
+        <div class="bg-emerald-500 rounded-full w-8 h-8 flex items-center justify-center mr-3">
+            <i class="fa-solid fa-check text-white"></i>
+        </div>
+        <span id="toast-msg" class="font-medium">Operação realizada com sucesso!</span>
+    </div>
+
+
+    <!-- JAVASCRIPT: O Cérebro da Aplicação -->
     <script>
         /**
-         * GESTÃO PATRIMONIAL MHS
-         * Frontend conectado ao Supabase no schema patrimonios_mhs.
+         * Gestão Patrimonial MHS
+         * Conectado ao Supabase: schema patrimonios_mhs / tabela patrimonios.
          */
 
-        /**
-         * PARTE 1: CONFIGURAÇÃO SUPABASE
-         */
         const SUPABASE_PROJECT_REF = 'clbpujmdjbywbuevhyhg';
         const SUPABASE_URL = `https://${SUPABASE_PROJECT_REF}.supabase.co`;
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNsYnB1am1kamJ5d2J1ZXZoeWhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyOTA3NTUsImV4cCI6MjA4OTg2Njc1NX0.3vwMm8mLEcg9nPzH2uyrB65mzxN_NMvvaLSn2OxKAxo';
 
         const SUPABASE_SCHEMA = 'patrimonios_mhs';
         const TABLE_PATRIMONIOS = 'patrimonios';
-        const VIEW_ATIVOS = 'v_patrimonios_ativos';
         const BUCKET_FOTOS = 'patrimonios-fotos';
         const BUCKET_NFS = 'patrimonios-nfs';
         const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
-        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            db: { schema: SUPABASE_SCHEMA },
-            auth: {
-                persistSession: false,
-                autoRefreshToken: false,
-                detectSessionInUrl: false
-            }
-        });
-
-        /**
-         * PARTE 2: ESTADO GLOBAL E HELPERS
-         */
+        let supabaseClient = null;
         let ativosData = [];
         let currentView = 'dashboard';
         let isLoadingAtivos = false;
@@ -425,42 +417,51 @@
         const formatDate = (dateString) => {
             if (!dateString) return '-';
 
-            const raw = String(dateString).trim();
-            if (!raw) return '-';
+            const value = String(dateString).trim();
 
-            const clean = raw.split('T')[0].split(' ')[0];
-
-            if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
-                const [y, m, d] = clean.split('-');
-                return `${d}/${m}/${y}`;
+            if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+                const [year, month, day] = value.slice(0, 10).split('-');
+                return `${day}/${month}/${year}`;
             }
 
-            if (/^\d{2}\/\d{2}\/\d{4}$/.test(clean)) {
-                return clean;
+            if (/^\d{2}\/\d{2}\/\d{4}/.test(value)) {
+                return value.slice(0, 10);
             }
 
-            const parsedDate = new Date(raw);
-            if (!Number.isNaN(parsedDate.getTime())) {
-                return parsedDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+            const date = new Date(value);
+            if (!Number.isNaN(date.getTime())) {
+                return date.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
             }
 
-            return raw;
+            return value;
         };
 
-        const toNumber = (value) => {
-            if (typeof value === 'number') return value;
-            if (value === null || value === undefined) return 0;
+        const normalizeNumero = (value) => {
+            const digits = String(value || '').replace(/\D/g, '');
+            return digits ? digits.padStart(4, '0') : '';
+        };
 
-            const raw = String(value).trim();
-            if (!raw) return 0;
+        const normalizeAtivo = (ativo) => ({
+            id: ativo.id,
+            numero: normalizeNumero(ativo.numero),
+            item: ativo.item || '',
+            classificacao: ativo.classificacao || 'Outros',
+            data: ativo.data || ativo.data_compra || null,
+            nf: ativo.nf || 'S/NF',
+            preco: Number(ativo.preco || 0),
+            local: ativo.local || 'Sem local definido',
+            pagamento: ativo.pagamento || 'Não informado',
+            img_url: ativo.img_url || null,
+            pdf_url: ativo.pdf_url || null,
+            ativo: ativo.ativo !== false
+        });
 
-            const normalized = raw
-                .replace(/[R$\s]/g, '')
-                .replace(/\./g, '')
-                .replace(',', '.');
-
-            const parsed = Number(normalized);
-            return Number.isFinite(parsed) ? parsed : 0;
+        const parseSupabaseError = (error) => {
+            if (!error) return 'Erro desconhecido.';
+            if (error.message) return error.message;
+            if (error.details) return error.details;
+            if (typeof error === 'string') return error;
+            return 'Não foi possível concluir a operação.';
         };
 
         const escapeHTML = (value) => {
@@ -470,61 +471,6 @@
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
-        };
-
-        const escapeJSAttr = (value) => {
-            return String(value ?? '')
-                .replace(/\\/g, '\\\\')
-                .replace(/'/g, "\\'")
-                .replace(/"/g, '&quot;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
-        };
-
-        const normalizeNumero = (value) => {
-            const raw = String(value ?? '').trim();
-            const digits = raw.replace(/\D/g, '');
-            return digits ? digits.padStart(4, '0') : raw;
-        };
-
-        const normalizeAtivo = (ativo) => {
-            return {
-                id: String(ativo.id),
-                numero: String(ativo.numero ?? ''),
-                item: String(ativo.item ?? 'Sem descrição'),
-                classificacao: String(ativo.classificacao ?? 'Outros'),
-                data: String(ativo.data ?? ativo.data_compra ?? ''),
-                data_compra: String(ativo.data_compra ?? ativo.data ?? ''),
-                nf: String(ativo.nf ?? 'S/NF'),
-                preco: toNumber(ativo.preco),
-                local: String(ativo.local ?? 'Sem local'),
-                pagamento: String(ativo.pagamento ?? 'Não informado'),
-                img_url: ativo.img_url || null,
-                pdf_url: ativo.pdf_url || null,
-                ativo: ativo.ativo !== false
-            };
-        };
-
-        const parseSupabaseError = (error) => {
-            const message = String(error?.message || error || 'Erro desconhecido');
-
-            if (message.includes('duplicate key')) {
-                return 'Já existe um patrimônio com essa plaqueta.';
-            }
-
-            if (message.includes('schema') && message.includes('exposed')) {
-                return 'O schema patrimonios_mhs precisa estar exposto em Project Settings > Data API.';
-            }
-
-            if (message.includes('permission denied') || message.includes('policy')) {
-                return 'Permissão negada. Verifique os grants/RLS/policies do Supabase.';
-            }
-
-            if (message.includes('Bucket not found')) {
-                return 'Bucket do Storage não encontrado. Verifique patrimonios-fotos e patrimonios-nfs.';
-            }
-
-            return message;
         };
 
         function setConnectionStatus(status, customMessage = '') {
@@ -559,10 +505,32 @@
             dotEl.className = `${baseDot} bg-blue-500`;
         }
 
+        function initSupabaseClient() {
+            if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+                throw new Error('Biblioteca do Supabase não carregou. Verifique sua conexão com a internet/CDN.');
+            }
+
+            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                db: { schema: SUPABASE_SCHEMA },
+                auth: {
+                    persistSession: false,
+                    autoRefreshToken: false,
+                    detectSessionInUrl: false
+                },
+                global: {
+                    headers: {
+                        'x-client-info': 'mhs-gestao-patrimonial-web'
+                    }
+                }
+            });
+        }
+
         /**
-         * PARTE 3: SUPABASE - LEITURA, CADASTRO E STORAGE
+         * PARTE 2: SUPABASE - LEITURA, CADASTRO E STORAGE
          */
         async function carregarAtivos({ silent = false } = {}) {
+            if (!supabaseClient) return [];
+
             try {
                 isLoadingAtivos = true;
                 setConnectionStatus('loading');
@@ -572,15 +540,16 @@
                 }
 
                 const { data, error } = await supabaseClient
-                    .from(VIEW_ATIVOS)
-                    .select('*')
-                    .order('numero', { ascending: true });
+                    .from(TABLE_PATRIMONIOS)
+                    .select('id, numero, item, classificacao, data_compra, nf, preco, local, pagamento, img_url, pdf_url, ativo')
+                    .eq('ativo', true)
+                    .order('numero', { ascending: true })
+                    .limit(5000);
 
                 if (error) throw error;
 
                 ativosData = (data || []).map(normalizeAtivo);
                 setConnectionStatus('connected');
-
                 initDashboard();
 
                 if (currentView === 'ativos') {
@@ -591,12 +560,13 @@
             } catch (error) {
                 console.error('Erro ao carregar ativos:', error);
                 setConnectionStatus('error');
-                showToast(`Erro ao carregar dados: ${parseSupabaseError(error)}`, 'error');
+                initDashboard();
 
                 if (currentView === 'ativos') {
                     renderAtivosList(getEl('searchInput')?.value || '');
                 }
 
+                showToast(`Erro ao carregar dados: ${parseSupabaseError(error)}`, 'error');
                 return [];
             } finally {
                 isLoadingAtivos = false;
@@ -704,14 +674,17 @@
                 const imagemFile = getEl('cad_imagem').files[0] || null;
                 const pdfFile = getEl('cad_pdf').files[0] || null;
 
-                if (!numero || !item || !classificacao || !local || !dataCompra || !Number.isFinite(preco)) {
-                    throw new Error('Preencha todos os campos obrigatórios corretamente.');
-                }
+                if (!numero) throw new Error('Informe uma plaqueta válida.');
+                if (!item) throw new Error('Informe a descrição do item.');
+                if (!classificacao) throw new Error('Selecione uma classificação.');
+                if (!local) throw new Error('Informe o local alocado.');
+                if (!dataCompra) throw new Error('Informe a data da compra.');
+                if (!Number.isFinite(preco) || preco < 0) throw new Error('Informe um preço válido.');
 
                 await verificarNumeroDisponivel(numero);
 
                 const imgUrl = await uploadStorageFile(BUCKET_FOTOS, imagemFile, numero, 'imagem');
-                const pdfPath = await uploadStorageFile(BUCKET_NFS, pdfFile, numero, 'pdf');
+                const pdfUrl = await uploadStorageFile(BUCKET_NFS, pdfFile, numero, 'pdf');
 
                 const payload = {
                     numero,
@@ -723,21 +696,27 @@
                     local,
                     pagamento,
                     img_url: imgUrl,
-                    pdf_url: pdfPath,
+                    pdf_url: pdfUrl,
                     ativo: true
                 };
 
-                const { error } = await supabaseClient
+                const { data, error } = await supabaseClient
                     .from(TABLE_PATRIMONIOS)
-                    .insert(payload);
+                    .insert(payload)
+                    .select('id, numero, item, classificacao, data_compra, nf, preco, local, pagamento, img_url, pdf_url, ativo')
+                    .single();
 
                 if (error) throw error;
 
+                const novoAtivo = normalizeAtivo(data);
+                ativosData.push(novoAtivo);
+                ativosData.sort((a, b) => a.numero.localeCompare(b.numero, 'pt-BR', { numeric: true }));
+
                 showToast('Ativo cadastrado com sucesso!');
                 form.reset();
+                initDashboard();
 
-                await carregarAtivos({ silent: true });
-                setTimeout(() => navigate('ativos'), 700);
+                setTimeout(() => navigate('ativos'), 600);
             } catch (error) {
                 console.error('Erro ao cadastrar ativo:', error);
                 showToast(`Erro ao salvar: ${parseSupabaseError(error)}`, 'error');
@@ -749,7 +728,7 @@
         }
 
         /**
-         * PARTE 4: LÓGICA DE NAVEGAÇÃO
+         * PARTE 3: LÓGICA DE NAVEGAÇÃO
          */
         const mobileMenuBtn = getEl('mobileMenuBtn');
         const mobileNav = getEl('mobileNav');
@@ -766,8 +745,11 @@
                 el.classList.remove('block');
             });
 
-            getEl(`view-${viewId}`).classList.remove('hidden');
-            getEl(`view-${viewId}`).classList.add('block');
+            const targetView = getEl(`view-${viewId}`);
+            if (targetView) {
+                targetView.classList.remove('hidden');
+                targetView.classList.add('block');
+            }
 
             document.querySelectorAll('.nav-btn').forEach(btn => {
                 if (btn.dataset.target === viewId) {
@@ -795,32 +777,32 @@
         }
 
         /**
-         * PARTE 5: DASHBOARD E GRÁFICOS
+         * PARTE 4: DASHBOARD E GRÁFICOS
          */
         function initDashboard() {
-            const totalValor = ativosData.reduce((acc, curr) => acc + toNumber(curr.preco), 0);
+            const totalValor = ativosData.reduce((acc, curr) => acc + Number(curr.preco || 0), 0);
             const totalItens = ativosData.length;
             const locaisUnicos = [...new Set(ativosData.map(item => item.local).filter(Boolean))];
 
-            const maiorItem = ativosData.reduce((maior, atual) => {
-                if (!maior) return atual;
-                return toNumber(atual.preco) > toNumber(maior.preco) ? atual : maior;
-            }, null);
+            let maiorItem = ativosData[0] || { preco: 0, item: '-' };
+            ativosData.forEach(i => {
+                if (Number(i.preco || 0) > Number(maiorItem.preco || 0)) maiorItem = i;
+            });
 
             getEl('kpi-valor-total').textContent = formatMoney(totalValor);
             getEl('kpi-total-itens').textContent = totalItens;
             getEl('kpi-locais').textContent = locaisUnicos.length;
-            getEl('kpi-maior-valor').textContent = maiorItem ? formatMoney(maiorItem.preco) : '-';
-            getEl('kpi-maior-valor').title = maiorItem ? maiorItem.item : '-';
+            getEl('kpi-maior-valor').textContent = totalItens ? formatMoney(maiorItem.preco) : '-';
+            getEl('kpi-maior-valor').title = totalItens ? maiorItem.item : '-';
 
             const resumoClassificacao = {};
             const resumoLocal = {};
 
             ativosData.forEach(ativo => {
                 const classificacao = ativo.classificacao || 'Outros';
-                const local = ativo.local || 'Sem local';
+                const local = ativo.local || 'Sem local definido';
 
-                resumoClassificacao[classificacao] = (resumoClassificacao[classificacao] || 0) + toNumber(ativo.preco);
+                resumoClassificacao[classificacao] = (resumoClassificacao[classificacao] || 0) + Number(ativo.preco || 0);
                 resumoLocal[local] = (resumoLocal[local] || 0) + 1;
             });
 
@@ -834,17 +816,19 @@
             Chart.defaults.font.family = 'Inter';
             Chart.defaults.color = '#64748b';
 
-            const classLabels = Object.keys(dadosClassificacao);
-            const classValues = Object.values(dadosClassificacao);
-
             const ctxPie = getEl('chartClassificacao').getContext('2d');
+            const labelsClassificacao = Object.keys(dadosClassificacao);
+            const valuesClassificacao = Object.values(dadosClassificacao);
+
             chartClassificacaoInstance = new Chart(ctxPie, {
                 type: 'doughnut',
                 data: {
-                    labels: classLabels.length ? classLabels : ['Sem dados'],
+                    labels: labelsClassificacao.length ? labelsClassificacao : ['Sem dados'],
                     datasets: [{
-                        data: classValues.length ? classValues : [0],
-                        backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#64748b'],
+                        data: valuesClassificacao.length ? valuesClassificacao : [1],
+                        backgroundColor: labelsClassificacao.length
+                            ? ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#64748b', '#14b8a6', '#f97316']
+                            : ['#e2e8f0'],
                         borderWidth: 0,
                         hoverOffset: 4
                     }]
@@ -853,18 +837,23 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8, font: { weight: '500' } } },
-                        tooltip: { callbacks: { label: (ctx) => ' ' + formatMoney(ctx.raw) } }
+                        legend: {
+                            position: 'right',
+                            labels: { usePointStyle: true, boxWidth: 8, font: { weight: '500' } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => labelsClassificacao.length ? ' ' + formatMoney(ctx.raw) : ' Sem dados'
+                            }
+                        }
                     },
                     cutout: '75%'
                 }
             });
 
-            const topLocais = Object.entries(dadosLocal)
-                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'))
-                .slice(0, 5);
-
+            const topLocais = Object.entries(dadosLocal).sort((a, b) => b[1] - a[1]).slice(0, 5);
             const ctxBar = getEl('chartLocal').getContext('2d');
+
             chartLocalInstance = new Chart(ctxBar, {
                 type: 'bar',
                 data: {
@@ -889,13 +878,13 @@
         }
 
         /**
-         * PARTE 6: LISTA DE ATIVOS
+         * PARTE 5: LISTA DE ATIVOS
          */
         function renderAtivosList(filtro = '') {
             const container = getEl('ativosContainer');
             container.innerHTML = '';
 
-            if (isLoadingAtivos && ativosData.length === 0) {
+            if (isLoadingAtivos) {
                 container.innerHTML = `
                     <div class="text-center py-10 text-slate-500">
                         <i class="fa-solid fa-spinner fa-spin text-4xl mb-3 text-slate-300 block"></i>
@@ -905,19 +894,13 @@
                 return;
             }
 
-            const filtroLower = String(filtro || '').toLowerCase();
-
-            const dadosFiltrados = ativosData.filter(item => {
-                const descricao = String(item.item || '').toLowerCase();
-                const numero = String(item.numero || '').toLowerCase();
-                const local = String(item.local || '').toLowerCase();
-                const classificacao = String(item.classificacao || '').toLowerCase();
-
-                return descricao.includes(filtroLower) ||
-                    numero.includes(filtroLower) ||
-                    local.includes(filtroLower) ||
-                    classificacao.includes(filtroLower);
-            });
+            const termo = String(filtro || '').toLowerCase().trim();
+            const dadosFiltrados = ativosData.filter(item =>
+                item.item.toLowerCase().includes(termo) ||
+                item.numero.includes(termo) ||
+                item.local.toLowerCase().includes(termo) ||
+                item.classificacao.toLowerCase().includes(termo)
+            );
 
             if (dadosFiltrados.length === 0) {
                 container.innerHTML = `
@@ -930,64 +913,74 @@
             }
 
             const agrupado = dadosFiltrados.reduce((acc, ativo) => {
-                const local = ativo.local || 'Sem local';
+                const local = ativo.local || 'Sem local definido';
                 if (!acc[local]) acc[local] = [];
                 acc[local].push(ativo);
                 return acc;
             }, {});
 
-            Object.keys(agrupado)
-                .sort((a, b) => a.localeCompare(b, 'pt-BR'))
-                .forEach((local, index) => {
-                    const itens = agrupado[local].sort((a, b) => String(a.numero).localeCompare(String(b.numero), 'pt-BR', { numeric: true }));
-                    const valorArea = itens.reduce((acc, curr) => acc + toNumber(curr.preco), 0);
+            Object.keys(agrupado).sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach((local, index) => {
+                const itens = agrupado[local].sort((a, b) => a.numero.localeCompare(b.numero, 'pt-BR', { numeric: true }));
+                const valorArea = itens.reduce((acc, curr) => acc + Number(curr.preco || 0), 0);
 
-                    const accordionHTML = `
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <button onclick="toggleAccordion('acc-${index}')" class="w-full px-5 py-4 flex justify-between items-center bg-white hover:bg-slate-50 transition-colors focus:outline-none">
-                                <div class="flex items-center text-left">
-                                    <div class="bg-blue-50 text-secondary border border-blue-100 w-10 h-10 rounded-lg flex items-center justify-center mr-4">
-                                        <i class="fa-solid fa-map-pin"></i>
-                                    </div>
-                                    <div>
-                                        <h4 class="font-bold text-slate-800 text-sm md:text-base">${escapeHTML(local)}</h4>
-                                        <p class="text-xs text-slate-500 font-medium mt-0.5">${itens.length} ite${itens.length > 1 ? 'ns' : 'm'} • <span class="text-emerald-600">${formatMoney(valorArea)}</span></p>
-                                    </div>
-                                </div>
-                                <i id="icon-acc-${index}" class="fa-solid fa-chevron-down text-slate-400 transition-transform duration-300"></i>
-                            </button>
+                const cardsHTML = itens.map(ativo => {
+                    const safeItem = escapeHTML(ativo.item);
+                    const safeClassificacao = escapeHTML(ativo.classificacao);
+                    const safeNumero = escapeHTML(ativo.numero);
+                    const imageHTML = ativo.img_url
+                        ? `<img src="${escapeHTML(ativo.img_url)}" alt="${safeItem}" class="w-full h-full object-cover">`
+                        : `<i class="fa-solid fa-image text-lg"></i>`;
 
-                            <div id="acc-${index}" class="accordion-content bg-slate-50/50 border-t border-slate-100">
-                                <div class="p-3 md:p-5">
-                                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        ${itens.map(ativo => `
-                                            <div onclick="openModal('${escapeJSAttr(ativo.id)}')" class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:border-secondary/50 hover:shadow-md transition-all group flex items-start">
-                                                <div class="w-14 h-14 rounded-md bg-slate-100 flex-shrink-0 flex items-center justify-center text-slate-400 mr-3 overflow-hidden border border-slate-200">
-                                                    ${ativo.img_url ? `<img src="${escapeHTML(ativo.img_url)}" class="w-full h-full object-cover" alt="${escapeHTML(ativo.item)}">` : `<i class="fa-solid fa-image text-lg"></i>`}
-                                                </div>
-                                                <div class="flex-1 min-w-0 py-0.5">
-                                                    <div class="flex justify-between items-start mb-1 gap-2">
-                                                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">Nº ${escapeHTML(ativo.numero)}</p>
-                                                        <span class="text-[10px] font-semibold text-secondary bg-blue-50 px-1.5 py-0.5 rounded truncate max-w-[80px]" title="${escapeHTML(ativo.classificacao)}">${escapeHTML(ativo.classificacao)}</span>
-                                                    </div>
-                                                    <p class="text-sm font-bold text-slate-800 truncate group-hover:text-secondary transition-colors" title="${escapeHTML(ativo.item)}">${escapeHTML(ativo.item)}</p>
-                                                    <p class="text-xs font-semibold text-emerald-600 mt-1">${formatMoney(ativo.preco)}</p>
-                                                </div>
-                                            </div>
-                                        `).join('')}
-                                    </div>
+                    return `
+                        <div onclick="openModal(${Number(ativo.id)})" class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:border-secondary/50 hover:shadow-md transition-all group flex items-start">
+                            <div class="w-14 h-14 rounded-md bg-slate-100 flex-shrink-0 flex items-center justify-center text-slate-400 mr-3 overflow-hidden border border-slate-200">
+                                ${imageHTML}
+                            </div>
+                            <div class="flex-1 min-w-0 py-0.5">
+                                <div class="flex justify-between items-start mb-1">
+                                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">Nº ${safeNumero}</p>
+                                    <span class="text-[10px] font-semibold text-secondary bg-blue-50 px-1.5 py-0.5 rounded truncate max-w-[80px]">${safeClassificacao}</span>
                                 </div>
+                                <p class="text-sm font-bold text-slate-800 truncate group-hover:text-secondary transition-colors" title="${safeItem}">${safeItem}</p>
+                                <p class="text-xs font-semibold text-emerald-600 mt-1">${formatMoney(ativo.preco)}</p>
                             </div>
                         </div>
                     `;
+                }).join('');
 
-                    container.insertAdjacentHTML('beforeend', accordionHTML);
-                });
+                const accordionHTML = `
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <button onclick="toggleAccordion('acc-${index}')" class="w-full px-5 py-4 flex justify-between items-center bg-white hover:bg-slate-50 transition-colors focus:outline-none">
+                            <div class="flex items-center text-left min-w-0">
+                                <div class="bg-blue-50 text-secondary border border-blue-100 w-10 h-10 rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
+                                    <i class="fa-solid fa-map-pin"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <h4 class="font-bold text-slate-800 text-sm md:text-base truncate">${escapeHTML(local)}</h4>
+                                    <p class="text-xs text-slate-500 font-medium mt-0.5">${itens.length} ite${itens.length > 1 ? 'ns' : 'm'} • <span class="text-emerald-600">${formatMoney(valorArea)}</span></p>
+                                </div>
+                            </div>
+                            <i id="icon-acc-${index}" class="fa-solid fa-chevron-down text-slate-400 transition-transform duration-300 ml-4"></i>
+                        </button>
+
+                        <div id="acc-${index}" class="accordion-content bg-slate-50/50 border-t border-slate-100">
+                            <div class="p-3 md:p-5">
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    ${cardsHTML}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                container.insertAdjacentHTML('beforeend', accordionHTML);
+            });
         }
 
         function toggleAccordion(id) {
             const content = getEl(id);
             const icon = getEl(`icon-${id}`);
+
             if (!content || !icon) return;
 
             if (content.classList.contains('open')) {
@@ -1000,12 +993,12 @@
         }
 
         /**
-         * PARTE 7: MODAL DE DETALHES
+         * PARTE 6: MODAL DE DETALHES
          */
         const modal = getEl('itemModal');
 
         function openModal(id) {
-            const ativo = ativosData.find(a => String(a.id) === String(id));
+            const ativo = ativosData.find(a => Number(a.id) === Number(id));
             if (!ativo) return;
 
             getEl('modal-numero').textContent = ativo.numero;
@@ -1013,7 +1006,7 @@
             getEl('modal-classificacao').textContent = ativo.classificacao;
             getEl('modal-local').textContent = ativo.local;
             getEl('modal-preco').textContent = formatMoney(ativo.preco);
-            getEl('modal-data').textContent = formatDate(ativo.data || ativo.data_compra);
+            getEl('modal-data').textContent = formatDate(ativo.data);
             getEl('modal-nf').textContent = ativo.nf;
             getEl('modal-pagamento').textContent = ativo.pagamento;
 
@@ -1054,7 +1047,7 @@
         }
 
         /**
-         * PARTE 8: TOAST E INICIALIZAÇÃO
+         * PARTE 7: TOAST E INICIALIZAÇÃO
          */
         function showToast(msg, type = 'success') {
             const toast = getEl('toast');
@@ -1078,25 +1071,35 @@
             setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3500);
         }
 
-        getEl('searchInput').addEventListener('input', (e) => {
-            renderAtivosList(e.target.value);
-        });
+        async function initApp() {
+            try {
+                setConnectionStatus('loading');
+                initDashboard();
 
-        getEl('formCadastro').addEventListener('submit', cadastrarAtivo);
+                initSupabaseClient();
 
-        window.onload = async () => {
-            setConnectionStatus('loading');
-            initDashboard();
-            await carregarAtivos();
-        };
-    </script>
+                getEl('searchInput').addEventListener('input', (e) => {
+                    renderAtivosList(e.target.value);
+                });
 
-', 'opacity-0');
-            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
+                getEl('formCadastro').addEventListener('submit', cadastrarAtivo);
+
+                await carregarAtivos();
+            } catch (error) {
+                console.error('Erro ao inicializar aplicação:', error);
+                setConnectionStatus('error');
+                initDashboard();
+                showToast(`Erro ao iniciar: ${parseSupabaseError(error)}`, 'error');
+            }
         }
 
-        window.onload = () => initDashboard();
+        document.addEventListener('DOMContentLoaded', initApp);
 
+        window.navigate = navigate;
+        window.toggleAccordion = toggleAccordion;
+        window.openModal = openModal;
+        window.closeModal = closeModal;
     </script>
+
 </body>
 </html>
