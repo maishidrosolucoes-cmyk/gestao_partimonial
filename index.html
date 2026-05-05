@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
@@ -29,7 +31,7 @@
     </script>
     <style>
         /* Ajustes para Safe Areas de Mobile e Custom Scrollbar */
-        body { padding-env(safe-area-inset-top); padding-env(safe-area-inset-bottom); }
+        body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
@@ -55,10 +57,10 @@
                     <!-- Status Indicator (Inspirado na imagem) -->
                     <div class="flex items-center mt-1 ml-1 sm:ml-12">
                         <span class="relative flex h-2.5 w-2.5 mr-1.5">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                            <span id="connectionPing" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-slate-400 opacity-75"></span>
+                            <span id="connectionDot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-400"></span>
                         </span>
-                        <span class="text-xs font-semibold text-emerald-600">Conectado</span>
+                        <span id="connectionStatus" class="text-xs font-semibold text-slate-500">Conectando...</span>
                     </div>
                 </div>
 
@@ -374,128 +376,474 @@
 
     <!-- Notification Toast -->
     <div id="toast" class="fixed bottom-6 right-6 bg-slate-800 text-white px-6 py-4 rounded-xl shadow-2xl transform transition-all duration-300 translate-y-20 opacity-0 z-50 flex items-center border border-slate-700">
-        <div class="bg-emerald-500 rounded-full w-8 h-8 flex items-center justify-center mr-3">
-            <i class="fa-solid fa-check text-white"></i>
-        </div>
-        <span id="toast-msg" class="font-medium">Operação realizada com sucesso!</span>
-    </div>
-
-    <!-- JAVASCRIPT: O Cérebro da Aplicação -->
+        <div class="bg-emerald-500 rounded-full w-8 h-8 flex items-center justify-center m    <!-- JAVASCRIPT: O Cérebro da Aplicação -->
     <script>
         /**
-         * PARTE 1: DADOS MOCKADOS
+         * GESTÃO PATRIMONIAL MHS
+         * Frontend conectado ao Supabase no schema patrimonios_mhs.
          */
-        let ativosData = [
-            { id: 1, numero: '0001', item: 'Notebook Gamer I5 ,8,512,15,PVD,W11 GAMING 3I', classificacao: 'Computador', data: '2022-11-14', nf: '1295597', preco: 5058.86, local: 'Cofre para bens/Defeito', pagamento: 'Pix Isabella', img_url: null, pdf_url: null },
-            { id: 2, numero: '0002', item: 'Notebook CI3 4/256 15 3I-15IML', classificacao: 'Computador', data: '2022-12-01', nf: '628589', preco: 2299.00, local: 'Diretoria/Ricardo', pagamento: 'Pix Isabella', img_url: null, pdf_url: null },
-            { id: 3, numero: '0003', item: 'Smartphone Samsung Galaxy A03 Core 32GB Verde', classificacao: 'Celular', data: '2022-12-27', nf: '827351', preco: 749.00, local: 'Cofre para bens/Defeito', pagamento: 'Pix Isabella', img_url: null, pdf_url: null },
-            { id: 4, numero: '0004', item: 'Smartphone Samsung Galaxy A03 Core 32GB Verde', classificacao: 'Celular', data: '2022-12-27', nf: '827351', preco: 749.00, local: 'Cofre para bens/Defeito', pagamento: 'Pix Isabella', img_url: null, pdf_url: null },
-            { id: 5, numero: '0005', item: 'Mesa Grande', classificacao: 'Móvel', data: '2023-01-14', nf: 'S/NF', preco: 1200.00, local: 'Sala Diretoria', pagamento: 'Pix Isabella', img_url: null, pdf_url: null },
-            { id: 6, numero: '0006', item: 'Mesa em L', classificacao: 'Móvel', data: '2023-01-14', nf: 'S/NF', preco: 500.00, local: 'Sala Diretoria', pagamento: 'Pix Isabella', img_url: null, pdf_url: null },
-            { id: 7, numero: '0007', item: 'Mesa Preta', classificacao: 'Móvel', data: '2023-01-16', nf: 'S/NF', preco: 350.00, local: 'Sala Diretoria', pagamento: 'Pix Isabella', img_url: null, pdf_url: null },
-            { id: 8, numero: '0008', item: 'Armário', classificacao: 'Móvel', data: '2023-01-14', nf: 'S/NF', preco: 400.00, local: 'Sala Diretoria', pagamento: 'Pix Isabella', img_url: null, pdf_url: null },
-            { id: 9, numero: '0009', item: 'Cadeira Secretária', classificacao: 'Móvel', data: '2023-01-16', nf: 'S/NF', preco: 150.00, local: 'Sala Diretoria/Luan', pagamento: 'Pix Isabella', img_url: null, pdf_url: null },
-            { id: 10, numero: '0012', item: 'Ar Condicionado 18000BTUs', classificacao: 'Eletrodomestico', data: '2023-01-06', nf: 'S/NF', preco: 500.00, local: 'Almoxarifado/Defeito', pagamento: 'Pix Isabella', img_url: null, pdf_url: null },
-            { id: 11, numero: '0016', item: 'Ar Condicionado 12000BTUs', classificacao: 'Eletrodomestico', data: '2023-01-06', nf: 'S/NF', preco: 400.00, local: 'Sala Administrativo/Financeiro', pagamento: 'Pix Isabella', img_url: null, pdf_url: null },
-            { id: 12, numero: '0019', item: 'Celular moto E22 128GB', classificacao: 'Celular', data: '2023-10-27', nf: '133402', preco: 880.00, local: 'Produção/Orlean/Defeito', pagamento: 'BOLETO', img_url: null, pdf_url: null },
-            { id: 13, numero: '0020', item: 'Microondas', classificacao: 'Eletrodomestico', data: '2023-02-14', nf: 'S/NF', preco: 460.00, local: 'Sala Copa', pagamento: 'DINHEIRO', img_url: null, pdf_url: null },
-        ];
-
-        const formatMoney = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-        const formatDate = (dateString) => { const [y, m, d] = dateString.split('-'); return `${d}/${m}/${y}`; };
 
         /**
-         * PARTE 2: LÓGICA DE NAVEGAÇÃO
+         * PARTE 1: CONFIGURAÇÃO SUPABASE
          */
-        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-        const mobileNav = document.getElementById('mobileNav');
+        const SUPABASE_PROJECT_REF = 'clbpujmdjbywbuevhyhg';
+        const SUPABASE_URL = `https://${SUPABASE_PROJECT_REF}.supabase.co`;
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNsYnB1am1kamJ5d2J1ZXZoeWhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyOTA3NTUsImV4cCI6MjA4OTg2Njc1NX0.3vwMm8mLEcg9nPzH2uyrB65mzxN_NMvvaLSn2OxKAxo';
+
+        const SUPABASE_SCHEMA = 'patrimonios_mhs';
+        const TABLE_PATRIMONIOS = 'patrimonios';
+        const VIEW_ATIVOS = 'v_patrimonios_ativos';
+        const BUCKET_FOTOS = 'patrimonios-fotos';
+        const BUCKET_NFS = 'patrimonios-nfs';
+        const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            db: { schema: SUPABASE_SCHEMA },
+            auth: {
+                persistSession: false,
+                autoRefreshToken: false,
+                detectSessionInUrl: false
+            }
+        });
+
+        /**
+         * PARTE 2: ESTADO GLOBAL E HELPERS
+         */
+        let ativosData = [];
+        let currentView = 'dashboard';
+        let isLoadingAtivos = false;
+        let chartClassificacaoInstance = null;
+        let chartLocalInstance = null;
+
+        const getEl = (id) => document.getElementById(id);
+
+        const formatMoney = (value) => {
+            const numberValue = Number(value || 0);
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numberValue);
+        };
+
+        const formatDate = (dateString) => {
+            if (!dateString) return '-';
+
+            const raw = String(dateString).trim();
+            if (!raw) return '-';
+
+            const clean = raw.split('T')[0].split(' ')[0];
+
+            if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+                const [y, m, d] = clean.split('-');
+                return `${d}/${m}/${y}`;
+            }
+
+            if (/^\d{2}\/\d{2}\/\d{4}$/.test(clean)) {
+                return clean;
+            }
+
+            const parsedDate = new Date(raw);
+            if (!Number.isNaN(parsedDate.getTime())) {
+                return parsedDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+            }
+
+            return raw;
+        };
+
+        const toNumber = (value) => {
+            if (typeof value === 'number') return value;
+            if (value === null || value === undefined) return 0;
+
+            const raw = String(value).trim();
+            if (!raw) return 0;
+
+            const normalized = raw
+                .replace(/[R$\s]/g, '')
+                .replace(/\./g, '')
+                .replace(',', '.');
+
+            const parsed = Number(normalized);
+            return Number.isFinite(parsed) ? parsed : 0;
+        };
+
+        const escapeHTML = (value) => {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        };
+
+        const escapeJSAttr = (value) => {
+            return String(value ?? '')
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        };
+
+        const normalizeNumero = (value) => {
+            const raw = String(value ?? '').trim();
+            const digits = raw.replace(/\D/g, '');
+            return digits ? digits.padStart(4, '0') : raw;
+        };
+
+        const normalizeAtivo = (ativo) => {
+            return {
+                id: String(ativo.id),
+                numero: String(ativo.numero ?? ''),
+                item: String(ativo.item ?? 'Sem descrição'),
+                classificacao: String(ativo.classificacao ?? 'Outros'),
+                data: String(ativo.data ?? ativo.data_compra ?? ''),
+                data_compra: String(ativo.data_compra ?? ativo.data ?? ''),
+                nf: String(ativo.nf ?? 'S/NF'),
+                preco: toNumber(ativo.preco),
+                local: String(ativo.local ?? 'Sem local'),
+                pagamento: String(ativo.pagamento ?? 'Não informado'),
+                img_url: ativo.img_url || null,
+                pdf_url: ativo.pdf_url || null,
+                ativo: ativo.ativo !== false
+            };
+        };
+
+        const parseSupabaseError = (error) => {
+            const message = String(error?.message || error || 'Erro desconhecido');
+
+            if (message.includes('duplicate key')) {
+                return 'Já existe um patrimônio com essa plaqueta.';
+            }
+
+            if (message.includes('schema') && message.includes('exposed')) {
+                return 'O schema patrimonios_mhs precisa estar exposto em Project Settings > Data API.';
+            }
+
+            if (message.includes('permission denied') || message.includes('policy')) {
+                return 'Permissão negada. Verifique os grants/RLS/policies do Supabase.';
+            }
+
+            if (message.includes('Bucket not found')) {
+                return 'Bucket do Storage não encontrado. Verifique patrimonios-fotos e patrimonios-nfs.';
+            }
+
+            return message;
+        };
+
+        function setConnectionStatus(status, customMessage = '') {
+            const statusEl = getEl('connectionStatus');
+            const pingEl = getEl('connectionPing');
+            const dotEl = getEl('connectionDot');
+
+            if (!statusEl || !pingEl || !dotEl) return;
+
+            const basePing = 'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75';
+            const baseDot = 'relative inline-flex rounded-full h-2.5 w-2.5';
+
+            if (status === 'connected') {
+                statusEl.textContent = customMessage || 'Conectado';
+                statusEl.className = 'text-xs font-semibold text-emerald-600';
+                pingEl.className = `${basePing} bg-emerald-400`;
+                dotEl.className = `${baseDot} bg-emerald-500`;
+                return;
+            }
+
+            if (status === 'error') {
+                statusEl.textContent = customMessage || 'Erro de conexão';
+                statusEl.className = 'text-xs font-semibold text-rose-600';
+                pingEl.className = `${basePing} bg-rose-400`;
+                dotEl.className = `${baseDot} bg-rose-500`;
+                return;
+            }
+
+            statusEl.textContent = customMessage || 'Conectando...';
+            statusEl.className = 'text-xs font-semibold text-blue-600';
+            pingEl.className = `${basePing} bg-blue-400`;
+            dotEl.className = `${baseDot} bg-blue-500`;
+        }
+
+        /**
+         * PARTE 3: SUPABASE - LEITURA, CADASTRO E STORAGE
+         */
+        async function carregarAtivos({ silent = false } = {}) {
+            try {
+                isLoadingAtivos = true;
+                setConnectionStatus('loading');
+
+                if (!silent && currentView === 'ativos') {
+                    renderAtivosList(getEl('searchInput')?.value || '');
+                }
+
+                const { data, error } = await supabaseClient
+                    .from(VIEW_ATIVOS)
+                    .select('*')
+                    .order('numero', { ascending: true });
+
+                if (error) throw error;
+
+                ativosData = (data || []).map(normalizeAtivo);
+                setConnectionStatus('connected');
+
+                initDashboard();
+
+                if (currentView === 'ativos') {
+                    renderAtivosList(getEl('searchInput')?.value || '');
+                }
+
+                return ativosData;
+            } catch (error) {
+                console.error('Erro ao carregar ativos:', error);
+                setConnectionStatus('error');
+                showToast(`Erro ao carregar dados: ${parseSupabaseError(error)}`, 'error');
+
+                if (currentView === 'ativos') {
+                    renderAtivosList(getEl('searchInput')?.value || '');
+                }
+
+                return [];
+            } finally {
+                isLoadingAtivos = false;
+            }
+        }
+
+        async function verificarNumeroDisponivel(numero) {
+            const { data, error } = await supabaseClient
+                .from(TABLE_PATRIMONIOS)
+                .select('id')
+                .eq('numero', numero)
+                .maybeSingle();
+
+            if (error) throw error;
+            if (data) throw new Error('Já existe um patrimônio com essa plaqueta.');
+        }
+
+        async function uploadStorageFile(bucket, file, numero, tipo) {
+            if (!file) return null;
+
+            if (file.size > MAX_UPLOAD_BYTES) {
+                throw new Error(`O arquivo "${file.name}" ultrapassa o limite de 5MB.`);
+            }
+
+            if (tipo === 'imagem' && !file.type.startsWith('image/')) {
+                throw new Error('A foto precisa ser uma imagem válida.');
+            }
+
+            if (tipo === 'pdf' && file.type !== 'application/pdf') {
+                throw new Error('A nota fiscal precisa ser um arquivo PDF.');
+            }
+
+            const extension = (file.name.split('.').pop() || (tipo === 'pdf' ? 'pdf' : 'jpg'))
+                .toLowerCase()
+                .replace(/[^a-z0-9]/g, '');
+
+            const filePath = `${numero}/${tipo}-${Date.now()}.${extension}`;
+
+            const { data, error } = await supabaseClient.storage
+                .from(bucket)
+                .upload(filePath, file, {
+                    cacheControl: '3600',
+                    upsert: false,
+                    contentType: file.type
+                });
+
+            if (error) throw error;
+
+            if (bucket === BUCKET_FOTOS) {
+                const { data: publicData } = supabaseClient.storage
+                    .from(bucket)
+                    .getPublicUrl(data.path);
+
+                return publicData.publicUrl;
+            }
+
+            return data.path;
+        }
+
+        async function abrirNotaFiscal(ativo) {
+            try {
+                if (!ativo?.pdf_url) {
+                    showToast('Nenhuma nota fiscal anexada para este ativo.', 'warning');
+                    return;
+                }
+
+                if (/^https?:\/\//i.test(ativo.pdf_url)) {
+                    window.open(ativo.pdf_url, '_blank', 'noopener,noreferrer');
+                    return;
+                }
+
+                const { data, error } = await supabaseClient.storage
+                    .from(BUCKET_NFS)
+                    .createSignedUrl(ativo.pdf_url, 60 * 60);
+
+                if (error) throw error;
+
+                window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+            } catch (error) {
+                console.error('Erro ao abrir nota fiscal:', error);
+                showToast(`Erro ao abrir NF: ${parseSupabaseError(error)}`, 'error');
+            }
+        }
+
+        async function cadastrarAtivo(event) {
+            event.preventDefault();
+
+            const form = event.currentTarget;
+            const submitButton = form.querySelector('button[type="submit"]');
+            const originalButtonHTML = submitButton.innerHTML;
+
+            try {
+                submitButton.disabled = true;
+                submitButton.classList.add('opacity-70', 'cursor-not-allowed');
+                submitButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Salvando...';
+
+                const numero = normalizeNumero(getEl('cad_numero').value);
+                const item = getEl('cad_item').value.trim();
+                const classificacao = getEl('cad_classificacao').value.trim();
+                const local = getEl('cad_local').value.trim();
+                const dataCompra = getEl('cad_data').value;
+                const preco = Number(getEl('cad_preco').value);
+                const nf = getEl('cad_nf').value.trim() || 'S/NF';
+                const pagamento = getEl('cad_pagamento').value.trim() || 'Não informado';
+                const imagemFile = getEl('cad_imagem').files[0] || null;
+                const pdfFile = getEl('cad_pdf').files[0] || null;
+
+                if (!numero || !item || !classificacao || !local || !dataCompra || !Number.isFinite(preco)) {
+                    throw new Error('Preencha todos os campos obrigatórios corretamente.');
+                }
+
+                await verificarNumeroDisponivel(numero);
+
+                const imgUrl = await uploadStorageFile(BUCKET_FOTOS, imagemFile, numero, 'imagem');
+                const pdfPath = await uploadStorageFile(BUCKET_NFS, pdfFile, numero, 'pdf');
+
+                const payload = {
+                    numero,
+                    item,
+                    classificacao,
+                    data_compra: dataCompra,
+                    nf,
+                    preco,
+                    local,
+                    pagamento,
+                    img_url: imgUrl,
+                    pdf_url: pdfPath,
+                    ativo: true
+                };
+
+                const { error } = await supabaseClient
+                    .from(TABLE_PATRIMONIOS)
+                    .insert(payload);
+
+                if (error) throw error;
+
+                showToast('Ativo cadastrado com sucesso!');
+                form.reset();
+
+                await carregarAtivos({ silent: true });
+                setTimeout(() => navigate('ativos'), 700);
+            } catch (error) {
+                console.error('Erro ao cadastrar ativo:', error);
+                showToast(`Erro ao salvar: ${parseSupabaseError(error)}`, 'error');
+            } finally {
+                submitButton.disabled = false;
+                submitButton.classList.remove('opacity-70', 'cursor-not-allowed');
+                submitButton.innerHTML = originalButtonHTML;
+            }
+        }
+
+        /**
+         * PARTE 4: LÓGICA DE NAVEGAÇÃO
+         */
+        const mobileMenuBtn = getEl('mobileMenuBtn');
+        const mobileNav = getEl('mobileNav');
 
         mobileMenuBtn.addEventListener('click', () => {
             mobileNav.classList.toggle('hidden');
         });
 
         function navigate(viewId) {
-            // Alterna visibilidade das views
+            currentView = viewId;
+
             document.querySelectorAll('.view-section').forEach(el => {
                 el.classList.add('hidden');
                 el.classList.remove('block');
             });
-            document.getElementById(`view-${viewId}`).classList.remove('hidden');
-            document.getElementById(`view-${viewId}`).classList.add('block');
 
-            // Atualiza botões do header
+            getEl(`view-${viewId}`).classList.remove('hidden');
+            getEl(`view-${viewId}`).classList.add('block');
+
             document.querySelectorAll('.nav-btn').forEach(btn => {
-                if(btn.dataset.target === viewId) {
+                if (btn.dataset.target === viewId) {
                     btn.classList.add('bg-blue-50', 'text-secondary', 'border-blue-100');
                     btn.classList.remove('text-slate-600', 'hover:bg-slate-100', 'hover:text-slate-900', 'hover:bg-white', 'border-transparent');
                 } else {
                     btn.classList.remove('bg-blue-50', 'text-secondary', 'border-blue-100');
                     btn.classList.add('text-slate-600', 'hover:bg-slate-100', 'hover:text-slate-900');
-                    // Correção específica para mobile nav
-                    if(btn.parentElement.id === 'mobileNav') {
+
+                    if (btn.parentElement.id === 'mobileNav') {
                         btn.classList.add('hover:bg-white', 'border-transparent');
                         btn.classList.remove('hover:bg-slate-100');
                     }
                 }
             });
 
-            // Fecha menu mobile
-            if(!mobileNav.classList.contains('hidden')){
+            if (!mobileNav.classList.contains('hidden')) {
                 mobileNav.classList.add('hidden');
             }
 
-            if(viewId === 'dashboard') initDashboard();
-            if(viewId === 'ativos') renderAtivosList();
-            
-            // Rolar para o topo ao navegar
+            if (viewId === 'dashboard') initDashboard();
+            if (viewId === 'ativos') renderAtivosList(getEl('searchInput')?.value || '');
+
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         /**
-         * PARTE 3: DASHBOARD E GRÁFICOS
+         * PARTE 5: DASHBOARD E GRÁFICOS
          */
-        let chartClassificacaoInstance = null;
-        let chartLocalInstance = null;
-
         function initDashboard() {
-            const totalValor = ativosData.reduce((acc, curr) => acc + curr.preco, 0);
+            const totalValor = ativosData.reduce((acc, curr) => acc + toNumber(curr.preco), 0);
             const totalItens = ativosData.length;
-            const locaisUnicos = [...new Set(ativosData.map(item => item.local))];
-            
-            let maiorItem = ativosData[0] || { preco: 0, item: '-' };
-            ativosData.forEach(i => { if(i.preco > maiorItem.preco) maiorItem = i; });
+            const locaisUnicos = [...new Set(ativosData.map(item => item.local).filter(Boolean))];
 
-            document.getElementById('kpi-valor-total').innerText = formatMoney(totalValor);
-            document.getElementById('kpi-total-itens').innerText = totalItens;
-            document.getElementById('kpi-locais').innerText = locaisUnicos.length;
-            document.getElementById('kpi-maior-valor').innerText = formatMoney(maiorItem.preco);
-            document.getElementById('kpi-maior-valor').title = maiorItem.item;
+            const maiorItem = ativosData.reduce((maior, atual) => {
+                if (!maior) return atual;
+                return toNumber(atual.preco) > toNumber(maior.preco) ? atual : maior;
+            }, null);
+
+            getEl('kpi-valor-total').textContent = formatMoney(totalValor);
+            getEl('kpi-total-itens').textContent = totalItens;
+            getEl('kpi-locais').textContent = locaisUnicos.length;
+            getEl('kpi-maior-valor').textContent = maiorItem ? formatMoney(maiorItem.preco) : '-';
+            getEl('kpi-maior-valor').title = maiorItem ? maiorItem.item : '-';
 
             const resumoClassificacao = {};
             const resumoLocal = {};
 
             ativosData.forEach(ativo => {
-                resumoClassificacao[ativo.classificacao] = (resumoClassificacao[ativo.classificacao] || 0) + ativo.preco;
-                resumoLocal[ativo.local] = (resumoLocal[ativo.local] || 0) + 1;
+                const classificacao = ativo.classificacao || 'Outros';
+                const local = ativo.local || 'Sem local';
+
+                resumoClassificacao[classificacao] = (resumoClassificacao[classificacao] || 0) + toNumber(ativo.preco);
+                resumoLocal[local] = (resumoLocal[local] || 0) + 1;
             });
 
             renderCharts(resumoClassificacao, resumoLocal);
         }
 
         function renderCharts(dadosClassificacao, dadosLocal) {
-            if(chartClassificacaoInstance) chartClassificacaoInstance.destroy();
-            if(chartLocalInstance) chartLocalInstance.destroy();
+            if (chartClassificacaoInstance) chartClassificacaoInstance.destroy();
+            if (chartLocalInstance) chartLocalInstance.destroy();
 
             Chart.defaults.font.family = 'Inter';
             Chart.defaults.color = '#64748b';
 
-            const ctxPie = document.getElementById('chartClassificacao').getContext('2d');
+            const classLabels = Object.keys(dadosClassificacao);
+            const classValues = Object.values(dadosClassificacao);
+
+            const ctxPie = getEl('chartClassificacao').getContext('2d');
             chartClassificacaoInstance = new Chart(ctxPie, {
                 type: 'doughnut',
                 data: {
-                    labels: Object.keys(dadosClassificacao),
+                    labels: classLabels.length ? classLabels : ['Sem dados'],
                     datasets: [{
-                        data: Object.values(dadosClassificacao),
+                        data: classValues.length ? classValues : [0],
                         backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#64748b'],
                         borderWidth: 0,
                         hoverOffset: 4
@@ -505,22 +853,25 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8, font: {weight: '500'} } },
+                        legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8, font: { weight: '500' } } },
                         tooltip: { callbacks: { label: (ctx) => ' ' + formatMoney(ctx.raw) } }
                     },
                     cutout: '75%'
                 }
             });
 
-            const topLocais = Object.entries(dadosLocal).sort((a,b) => b[1] - a[1]).slice(0, 5);
-            const ctxBar = document.getElementById('chartLocal').getContext('2d');
+            const topLocais = Object.entries(dadosLocal)
+                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'))
+                .slice(0, 5);
+
+            const ctxBar = getEl('chartLocal').getContext('2d');
             chartLocalInstance = new Chart(ctxBar, {
                 type: 'bar',
                 data: {
-                    labels: topLocais.map(i => i[0].split('/')[0]),
+                    labels: topLocais.length ? topLocais.map(i => i[0].split('/')[0]) : ['Sem dados'],
                     datasets: [{
                         label: 'Qtd de Itens',
-                        data: topLocais.map(i => i[1]),
+                        data: topLocais.length ? topLocais.map(i => i[1]) : [0],
                         backgroundColor: '#3b82f6',
                         borderRadius: 4
                     }]
@@ -538,78 +889,107 @@
         }
 
         /**
-         * PARTE 4: LISTA DE ATIVOS
+         * PARTE 6: LISTA DE ATIVOS
          */
         function renderAtivosList(filtro = '') {
-            const container = document.getElementById('ativosContainer');
+            const container = getEl('ativosContainer');
             container.innerHTML = '';
 
-            const dadosFiltrados = ativosData.filter(item => 
-                item.item.toLowerCase().includes(filtro.toLowerCase()) || 
-                item.numero.includes(filtro) ||
-                item.local.toLowerCase().includes(filtro.toLowerCase())
-            );
+            if (isLoadingAtivos && ativosData.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-10 text-slate-500">
+                        <i class="fa-solid fa-spinner fa-spin text-4xl mb-3 text-slate-300 block"></i>
+                        Carregando ativos do Supabase...
+                    </div>
+                `;
+                return;
+            }
 
-            if(dadosFiltrados.length === 0){
-                container.innerHTML = `<div class="text-center py-10 text-slate-500"><i class="fa-solid fa-folder-open text-4xl mb-3 text-slate-300 block"></i> Nenhum ativo encontrado.</div>`;
+            const filtroLower = String(filtro || '').toLowerCase();
+
+            const dadosFiltrados = ativosData.filter(item => {
+                const descricao = String(item.item || '').toLowerCase();
+                const numero = String(item.numero || '').toLowerCase();
+                const local = String(item.local || '').toLowerCase();
+                const classificacao = String(item.classificacao || '').toLowerCase();
+
+                return descricao.includes(filtroLower) ||
+                    numero.includes(filtroLower) ||
+                    local.includes(filtroLower) ||
+                    classificacao.includes(filtroLower);
+            });
+
+            if (dadosFiltrados.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-10 text-slate-500">
+                        <i class="fa-solid fa-folder-open text-4xl mb-3 text-slate-300 block"></i>
+                        Nenhum ativo encontrado.
+                    </div>
+                `;
                 return;
             }
 
             const agrupado = dadosFiltrados.reduce((acc, ativo) => {
-                if (!acc[ativo.local]) acc[ativo.local] = [];
-                acc[ativo.local].push(ativo);
+                const local = ativo.local || 'Sem local';
+                if (!acc[local]) acc[local] = [];
+                acc[local].push(ativo);
                 return acc;
             }, {});
 
-            Object.keys(agrupado).sort().forEach((local, index) => {
-                const itens = agrupado[local];
-                const valorArea = itens.reduce((acc, curr) => acc + curr.preco, 0);
-                
-                const accordionHTML = `
-                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <button onclick="toggleAccordion('acc-${index}')" class="w-full px-5 py-4 flex justify-between items-center bg-white hover:bg-slate-50 transition-colors focus:outline-none">
-                            <div class="flex items-center text-left">
-                                <div class="bg-blue-50 text-secondary border border-blue-100 w-10 h-10 rounded-lg flex items-center justify-center mr-4">
-                                    <i class="fa-solid fa-map-pin"></i>
+            Object.keys(agrupado)
+                .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+                .forEach((local, index) => {
+                    const itens = agrupado[local].sort((a, b) => String(a.numero).localeCompare(String(b.numero), 'pt-BR', { numeric: true }));
+                    const valorArea = itens.reduce((acc, curr) => acc + toNumber(curr.preco), 0);
+
+                    const accordionHTML = `
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <button onclick="toggleAccordion('acc-${index}')" class="w-full px-5 py-4 flex justify-between items-center bg-white hover:bg-slate-50 transition-colors focus:outline-none">
+                                <div class="flex items-center text-left">
+                                    <div class="bg-blue-50 text-secondary border border-blue-100 w-10 h-10 rounded-lg flex items-center justify-center mr-4">
+                                        <i class="fa-solid fa-map-pin"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-slate-800 text-sm md:text-base">${escapeHTML(local)}</h4>
+                                        <p class="text-xs text-slate-500 font-medium mt-0.5">${itens.length} ite${itens.length > 1 ? 'ns' : 'm'} • <span class="text-emerald-600">${formatMoney(valorArea)}</span></p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h4 class="font-bold text-slate-800 text-sm md:text-base">${local}</h4>
-                                    <p class="text-xs text-slate-500 font-medium mt-0.5">${itens.length} ite${itens.length > 1 ? 'ns' : 'm'} • <span class="text-emerald-600">${formatMoney(valorArea)}</span></p>
-                                </div>
-                            </div>
-                            <i id="icon-acc-${index}" class="fa-solid fa-chevron-down text-slate-400 transition-transform duration-300"></i>
-                        </button>
-                        
-                        <div id="acc-${index}" class="accordion-content bg-slate-50/50 border-t border-slate-100">
-                            <div class="p-3 md:p-5">
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    ${itens.map(ativo => `
-                                        <div onclick="openModal(${ativo.id})" class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:border-secondary/50 hover:shadow-md transition-all group flex items-start">
-                                            <div class="w-14 h-14 rounded-md bg-slate-100 flex-shrink-0 flex items-center justify-center text-slate-400 mr-3 overflow-hidden border border-slate-200">
-                                                ${ativo.img_url ? `<img src="${ativo.img_url}" class="w-full h-full object-cover">` : `<i class="fa-solid fa-image text-lg"></i>`}
-                                            </div>
-                                            <div class="flex-1 min-w-0 py-0.5">
-                                                <div class="flex justify-between items-start mb-1">
-                                                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">Nº ${ativo.numero}</p>
-                                                    <span class="text-[10px] font-semibold text-secondary bg-blue-50 px-1.5 py-0.5 rounded truncate max-w-[60px]">${ativo.classificacao}</span>
+                                <i id="icon-acc-${index}" class="fa-solid fa-chevron-down text-slate-400 transition-transform duration-300"></i>
+                            </button>
+
+                            <div id="acc-${index}" class="accordion-content bg-slate-50/50 border-t border-slate-100">
+                                <div class="p-3 md:p-5">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        ${itens.map(ativo => `
+                                            <div onclick="openModal('${escapeJSAttr(ativo.id)}')" class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:border-secondary/50 hover:shadow-md transition-all group flex items-start">
+                                                <div class="w-14 h-14 rounded-md bg-slate-100 flex-shrink-0 flex items-center justify-center text-slate-400 mr-3 overflow-hidden border border-slate-200">
+                                                    ${ativo.img_url ? `<img src="${escapeHTML(ativo.img_url)}" class="w-full h-full object-cover" alt="${escapeHTML(ativo.item)}">` : `<i class="fa-solid fa-image text-lg"></i>`}
                                                 </div>
-                                                <p class="text-sm font-bold text-slate-800 truncate group-hover:text-secondary transition-colors" title="${ativo.item}">${ativo.item}</p>
-                                                <p class="text-xs font-semibold text-emerald-600 mt-1">${formatMoney(ativo.preco)}</p>
+                                                <div class="flex-1 min-w-0 py-0.5">
+                                                    <div class="flex justify-between items-start mb-1 gap-2">
+                                                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">Nº ${escapeHTML(ativo.numero)}</p>
+                                                        <span class="text-[10px] font-semibold text-secondary bg-blue-50 px-1.5 py-0.5 rounded truncate max-w-[80px]" title="${escapeHTML(ativo.classificacao)}">${escapeHTML(ativo.classificacao)}</span>
+                                                    </div>
+                                                    <p class="text-sm font-bold text-slate-800 truncate group-hover:text-secondary transition-colors" title="${escapeHTML(ativo.item)}">${escapeHTML(ativo.item)}</p>
+                                                    <p class="text-xs font-semibold text-emerald-600 mt-1">${formatMoney(ativo.preco)}</p>
+                                                </div>
                                             </div>
-                                        </div>
-                                    `).join('')}
+                                        `).join('')}
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                `;
-                container.insertAdjacentHTML('beforeend', accordionHTML);
-            });
+                    `;
+
+                    container.insertAdjacentHTML('beforeend', accordionHTML);
+                });
         }
 
         function toggleAccordion(id) {
-            const content = document.getElementById(id);
-            const icon = document.getElementById(`icon-${id}`);
+            const content = getEl(id);
+            const icon = getEl(`icon-${id}`);
+            if (!content || !icon) return;
+
             if (content.classList.contains('open')) {
                 content.classList.remove('open');
                 icon.style.transform = 'rotate(0deg)';
@@ -619,46 +999,47 @@
             }
         }
 
-        document.getElementById('searchInput').addEventListener('input', (e) => {
-            renderAtivosList(e.target.value);
-        });
-
         /**
-         * PARTE 5: MODAL DE DETALHES
+         * PARTE 7: MODAL DE DETALHES
          */
-        const modal = document.getElementById('itemModal');
-        
+        const modal = getEl('itemModal');
+
         function openModal(id) {
-            const ativo = ativosData.find(a => a.id === id);
-            if(!ativo) return;
+            const ativo = ativosData.find(a => String(a.id) === String(id));
+            if (!ativo) return;
 
-            document.getElementById('modal-numero').innerText = ativo.numero;
-            document.getElementById('modal-item').innerText = ativo.item;
-            document.getElementById('modal-classificacao').innerText = ativo.classificacao;
-            document.getElementById('modal-local').innerText = ativo.local;
-            document.getElementById('modal-preco').innerText = formatMoney(ativo.preco);
-            document.getElementById('modal-data').innerText = formatDate(ativo.data);
-            document.getElementById('modal-nf').innerText = ativo.nf;
-            document.getElementById('modal-pagamento').innerText = ativo.pagamento;
-            
-            // Icone dinamico de pagamento
-            const iconPgto = document.getElementById('modal-icon-pagamento');
-            if(ativo.pagamento.toLowerCase().includes('pix')) iconPgto.className = 'fa-brands fa-pix text-emerald-500 text-2xl opacity-20';
-            else if(ativo.pagamento.toLowerCase().includes('boleto')) iconPgto.className = 'fa-solid fa-barcode text-slate-500 text-2xl opacity-20';
-            else iconPgto.className = 'fa-solid fa-money-bill-wave text-green-500 text-2xl opacity-20';
+            getEl('modal-numero').textContent = ativo.numero;
+            getEl('modal-item').textContent = ativo.item;
+            getEl('modal-classificacao').textContent = ativo.classificacao;
+            getEl('modal-local').textContent = ativo.local;
+            getEl('modal-preco').textContent = formatMoney(ativo.preco);
+            getEl('modal-data').textContent = formatDate(ativo.data || ativo.data_compra);
+            getEl('modal-nf').textContent = ativo.nf;
+            getEl('modal-pagamento').textContent = ativo.pagamento;
 
-            const imgEl = document.getElementById('modal-imagem');
-            if(ativo.img_url) {
-                imgEl.src = ativo.img_url;
+            const iconPgto = getEl('modal-icon-pagamento');
+            const pagamentoLower = ativo.pagamento.toLowerCase();
+
+            if (pagamentoLower.includes('pix')) {
+                iconPgto.className = 'fa-brands fa-pix text-emerald-500 text-2xl opacity-20';
+            } else if (pagamentoLower.includes('boleto')) {
+                iconPgto.className = 'fa-solid fa-barcode text-slate-500 text-2xl opacity-20';
+            } else if (pagamentoLower.includes('cart')) {
+                iconPgto.className = 'fa-solid fa-credit-card text-blue-500 text-2xl opacity-20';
             } else {
-                imgEl.src = 'https://placehold.co/400x400/f8fafc/64748b?text=Sem+Foto';
+                iconPgto.className = 'fa-solid fa-money-bill-wave text-green-500 text-2xl opacity-20';
             }
 
-            const btnNf = document.getElementById('modal-btn-nf');
-            if(ativo.nf !== 'S/NF' && ativo.pdf_url) {
+            const imgEl = getEl('modal-imagem');
+            imgEl.src = ativo.img_url || 'https://placehold.co/400x400/f8fafc/64748b?text=Sem+Foto';
+            imgEl.alt = ativo.item || 'Foto do Item';
+
+            const btnNf = getEl('modal-btn-nf');
+
+            if (ativo.nf !== 'S/NF' && ativo.pdf_url) {
                 btnNf.classList.remove('opacity-50', 'cursor-not-allowed');
                 btnNf.innerHTML = '<i class="fa-solid fa-file-pdf text-accent mr-2"></i> Visualizar Nota Fiscal';
-                btnNf.onclick = () => window.open(ativo.pdf_url, '_blank');
+                btnNf.onclick = () => abrirNotaFiscal(ativo);
             } else {
                 btnNf.classList.add('opacity-50', 'cursor-not-allowed');
                 btnNf.innerHTML = '<i class="fa-solid fa-file-pdf mr-2"></i> NF Não Anexada';
@@ -666,10 +1047,6 @@
             }
 
             modal.classList.remove('hidden');
-            setTimeout(() => {
-                modal.firstElementChild.nextElementSibling.classList.add('scale-100', 'opacity-100');
-                modal.firstElementChild.nextElementSibling.classList.remove('scale-95', 'opacity-0');
-            }, 10);
         }
 
         function closeModal() {
@@ -677,34 +1054,44 @@
         }
 
         /**
-         * PARTE 6: CADASTRO DE NOVO ATIVO
+         * PARTE 8: TOAST E INICIALIZAÇÃO
          */
-        document.getElementById('formCadastro').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const novoAtivo = {
-                id: Date.now(),
-                numero: document.getElementById('cad_numero').value,
-                item: document.getElementById('cad_item').value,
-                classificacao: document.getElementById('cad_classificacao').value,
-                data: document.getElementById('cad_data').value,
-                nf: document.getElementById('cad_nf').value || 'S/NF',
-                preco: parseFloat(document.getElementById('cad_preco').value),
-                local: document.getElementById('cad_local').value,
-                pagamento: document.getElementById('cad_pagamento').value,
-                img_url: null,
-                pdf_url: null
-            };
+        function showToast(msg, type = 'success') {
+            const toast = getEl('toast');
+            const iconBox = toast.querySelector('div');
+            const icon = iconBox.querySelector('i');
 
-            ativosData.push(novoAtivo);
-            showToast('Ativo cadastrado com sucesso!');
-            this.reset();
-            setTimeout(() => navigate('ativos'), 1500);
+            getEl('toast-msg').textContent = msg;
+
+            if (type === 'error') {
+                iconBox.className = 'bg-rose-500 rounded-full w-8 h-8 flex items-center justify-center mr-3';
+                icon.className = 'fa-solid fa-triangle-exclamation text-white';
+            } else if (type === 'warning') {
+                iconBox.className = 'bg-amber-500 rounded-full w-8 h-8 flex items-center justify-center mr-3';
+                icon.className = 'fa-solid fa-circle-exclamation text-white';
+            } else {
+                iconBox.className = 'bg-emerald-500 rounded-full w-8 h-8 flex items-center justify-center mr-3';
+                icon.className = 'fa-solid fa-check text-white';
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3500);
+        }
+
+        getEl('searchInput').addEventListener('input', (e) => {
+            renderAtivosList(e.target.value);
         });
 
-        function showToast(msg) {
-            const toast = document.getElementById('toast');
-            document.getElementById('toast-msg').innerText = msg;
-            toast.classList.remove('translate-y-20', 'opacity-0');
+        getEl('formCadastro').addEventListener('submit', cadastrarAtivo);
+
+        window.onload = async () => {
+            setConnectionStatus('loading');
+            initDashboard();
+            await carregarAtivos();
+        };
+    </script>
+
+', 'opacity-0');
             setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
         }
 
